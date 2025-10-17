@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.hashers import make_password
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 # ----------------------------
@@ -41,8 +42,8 @@ class EstadoLectura(models.TextChoices):
 class Persona(models.Model):
     nombre = models.CharField(max_length= 255, null= False, blank=False)
     apellido = models.CharField(max_length= 255, null= False, blank=False)
-    telefono = models.CharField(max_length= 100, null= False, blank=False)
-    correo = models.CharField(max_length= 255, null= False, blank=False)
+    telefono = models.CharField(max_length= 20, null= False, blank=False)
+    correo = models.EmailField(max_length= 255, null= False, blank=False, unique=True)
 
     def __str__(self):
         return self.nombre 
@@ -63,6 +64,12 @@ class Cuenta (models.Model):
         default= Rol.USUARIO,
     )
 
+    def save(self, *args, **kwargs):
+        # Solo hashea si no está ya hasheada
+        if not self.contrasena.startswith('pbkdf2_'):
+            self.contrasena = make_password(self.contrasena)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return self.usuario
     
@@ -70,8 +77,9 @@ class Cuenta (models.Model):
 class MaterialLectura(models.Model):
     titulo = models.CharField(max_length= 255, null= False, blank=False)
     autor = models.CharField(max_length= 255, null= False, blank=False)
-    anio_publicacion = models.IntegerField(null= False, blank=False)
+    anio_publicacion = models.PositiveIntegerField(null= False, blank=False, default=2025)
     genero = models.CharField(max_length=20, choices=Genero.choices, default=Genero.CIENCIAS)
+    editorial = models.CharField(max_length= 255, null= False, blank=False)
 
     class Meta:
         abstract = False  # va a crear una tabla en la base de datos por registro literario
@@ -79,23 +87,20 @@ class MaterialLectura(models.Model):
     
 #modulo lectura
 class Libro (MaterialLectura):
-    isbn = models.CharField(max_length= 13, null= False, blank=False)
-    editorial = models.CharField(max_length= 13, null= False, blank=False)
+    isbn = models.CharField(max_length= 13, null= False, blank=False)  
     
 
     def __str__(self):
         return self.titulo
 
 class Manga (MaterialLectura):
-    volumen = models.IntegerField(null= False, blank=False)
-    editorial = models.CharField(max_length= 13, null= False, blank=False)
+    volumen = models.PositiveIntegerField(null= False, blank=False,default=1)
 
     def __str__(self):
         return self.titulo
 
 class Novela (MaterialLectura):
-    volumen = models.IntegerField(null= False, blank=False)
-    editorial = models.CharField(max_length= 255, null= False, blank=False)
+    volumen = models.PositiveIntegerField(null= False, blank=False,default=1)
 
     def __str__(self):
         return self.titulo
@@ -103,18 +108,11 @@ class Novela (MaterialLectura):
 
 class RegistroLectura(models.Model):
     persona = models.ForeignKey(Persona, on_delete=models.CASCADE)
-    # Campos necesarios para GenericForeignKey
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
-    object_id = models.PositiveIntegerField()
-    material = GenericForeignKey('content_type', 'object_id')
-    
-    fecha_creacion = models.DateTimeField(auto_now_add=True)    
-    pagina_actual = models.IntegerField(null= False, blank=False)
-    estado = models.CharField(
-        max_length= 10,
-        choices= EstadoLectura.choices,
-        default= EstadoLectura.PENDIENTE,
-    )
+    material = models.ForeignKey(MaterialLectura, on_delete=models.CASCADE)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    pagina_actual = models.PositiveIntegerField()
+    estado = models.CharField(max_length=10, choices=EstadoLectura.choices, default=EstadoLectura.PENDIENTE)
+
 
     def __str__(self):
         return f"{self.persona} - {self.material} ({self.estado})"
